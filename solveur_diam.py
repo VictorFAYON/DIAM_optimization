@@ -1,0 +1,120 @@
+import gurobipy as gp
+from gurobipy import GRB
+import matplotlib.pyplot as plt
+
+model = gp.Model("timetable_discrete")
+
+machines = 3
+timeline = 48
+ordres = [
+    {'numéro': 1, 'duration': 2, 'due date': 10}, {'numéro': 2, 'duration': 2, 'due date': 10},
+    {'numéro': 3, 'duration': 1, 'due date': 10}, {'numéro': 4, 'duration': 2, 'due date': 10},
+    {'numéro': 5, 'duration': 3, 'due date': 15}, {'numéro': 6, 'duration': 4, 'due date': 15},
+    {'numéro': 7, 'duration': 2, 'due date': 20}, {'numéro': 8, 'duration': 4, 'due date': 20},
+    {'numéro': 9, 'duration': 2, 'due date': 30}, {'numéro': 10, 'duration': 2, 'due date': 30},
+    {'numéro': 11, 'duration': 2, 'due date': 30}, {'numéro': 12, 'duration': 2, 'due date': 30},
+    {'numéro': 13, 'duration': 10, 'due date': 40}, {'numéro': 14, 'duration': 2, 'due date': 45},
+    {'numéro': 15, 'duration': 8, 'due date': 40}, {'numéro': 16, 'duration': 5, 'due date': 40},
+    {'numéro': 17, 'duration': 2, 'due date': 35}, {'numéro': 18, 'duration': 12, 'due date': 30},
+    {'numéro': 19, 'duration': 2, 'due date': 30}, {'numéro': 20, 'duration': 3, 'due date': 30}
+]
+
+# ---- PARAMETERS -----------------------------------------------------------
+I        = range(len(ordres))          # order indices
+M        = range(machines)             # machine indices
+T        = range(timeline)             # time indices
+K        = 10                          # tardiness weight
+due_date = [o['due date'] for o in ordres]
+
+# ---- DECISION VARIABLES ---------------------------------------------------
+# assignment: x[i,t,m] == 1 if order i processed on machine m at time t
+x = model.addVars(I, T, M, vtype=GRB.BINARY, name="x")
+
+# completion times
+C = model.addVars(I, vtype=GRB.INTEGER, name="C")
+
+# tardiness ≥ max{0, C_i − d_i}, earliness ≥ max{0, d_i − C_i}
+Tvar = model.addVars(I, vtype=GRB.CONTINUOUS, name="T")   # tardiness
+Evar = model.addVars(I, vtype=GRB.CONTINUOUS, name="E")   # earliness
+
+# ---- COMPLETION‑TIME DEFINITION -------------------------------------------
+for i in I:
+    for t in T:
+        for m in M:
+            # If any (t,m) is chosen, C_i must be at least that t
+            model.addConstr(C[i] >= t * x[i, t, m])
+
+# ---- TARDINESS / EARLINESS DEFINITION -------------------------------------
+for i in I:
+    # T_i ≥ C_i − d_i
+    model.addConstr(Tvar[i] >= C[i] - due_date[i])
+    # E_i ≥ d_i − C_i
+    model.addConstr(Evar[i] >= due_date[i] - C[i])
+
+# ---- OBJECTIVE ------------------------------------------------------------
+model.setObjective(
+    K * gp.quicksum(Tvar[i] for i in I) + gp.quicksum(Evar[i] for i in I),
+    GRB.MINIMIZE
+)
+
+for i, ordre in enumerate(ordres):
+    model.addConstr(
+        gp.quicksum(x[i, t, m] for m in range(machines)
+                    for t in range(ordre['due date'])) == ordre['duration'],name=f"assign_{i}")
+
+for m in range(machines):
+    for t in range(timeline):
+        model.addConstr(
+            gp.quicksum(
+                x[i, t, m]
+                for i, ordre in enumerate(ordres) )<= 1,
+            name=f"machine_{m}time{t}")
+
+model.optimize()
+
+
+# x = {(i, t, m): var}  avec var.X > 0.5 si l’ordre i commence à t sur machine m
+# ordres = {i: {'numéro': id, 'duration': d}}
+
+schedule = []
+
+if model.status == GRB.OPTIMAL:
+    for (i, t, m), var in x.items():
+        if var.X > 0.5:
+            duration = ordres[i]['duration']
+            order_id = ordres[i]['numéro']
+            schedule.append({
+                'Machine': m,
+                'Start': t,
+                'Duration': duration,
+                'Order': f"Ordre {order_id}"
+            })
+else:
+    print("Pas de solution optimale trouvée.")
+        
+
+# Regrouper par machine
+machines = sorted(set(task['Machine'] for task in schedule))
+machine_to_y = {m: idx for idx, m in enumerate(machines)}
+
+# Tracer
+fig, ax = plt.subplots(figsize=(10, 6))
+
+colors = plt.cm.tab20.colors  # palette de couleurs
+
+for idx, task in enumerate(schedule):
+    y = machine_to_y[task['Machine']]
+    ax.barh(y, task['Duration'], left=task['Start'], height=0.4,
+            color=colors[idx % len(colors)], edgecolor='black')
+    ax.text(task['Start'] + task['Duration']/2, y, task['Order'],
+            va='center', ha='center', fontsize=9, color='white')
+
+# Axe y avec noms de machines
+ax.set_yticks(range(len(machines)))
+ax.set_yticklabels([f"Machine {m}" for m in machines])
+ax.set_xlabel("Temps")
+ax.set_title("Emploi du temps des ordres par machine")
+ax.grid(True)
+
+plt.tight_layout()
+plt.show()
