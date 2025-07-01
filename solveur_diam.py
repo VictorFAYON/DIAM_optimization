@@ -53,6 +53,27 @@ for i in I:
     model.addConstr(Tvar[i] >= C[i] - due_date[i])
     # E_i ≥ d_i − C_i
     model.addConstr(Evar[i] >= due_date[i] - C[i])
+#-----------------------------------------------------------------------------
+
+setup_time = [[1]*len(ordres) for _ in ordres]
+
+
+# --- CHANGING TIME-----------------------------------------------------------
+for m in M:
+    for i in I:
+        for j in I:
+            if i == j: 
+                continue
+            s_ij = setup_time[i][j]
+            # si setup_time=0, pas besoin de contraindre
+            if s_ij > 0:
+                # pour tout t où t + s_ij reste dans l'horizon
+                for t in range(timeline - s_ij):
+                    for tau in range(1, s_ij+1):
+                        model.addConstr(
+                            x[i, t, m] + x[j, t + tau, m] <= 1,
+                            name=f"setup_m{m}_i{i}_j{j}_t{t}_tau{tau}"
+                        )
 
 # ---- OBJECTIVE ------------------------------------------------------------
 model.setObjective(
@@ -140,5 +161,4 @@ plt.show()
 
 
 # -
-
 
