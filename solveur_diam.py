@@ -1,6 +1,9 @@
+# +
 import gurobipy as gp
 from gurobipy import GRB
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
 
 model = gp.Model("timetable_discrete")
 
@@ -81,40 +84,61 @@ schedule = []
 if model.status == GRB.OPTIMAL:
     for (i, t, m), var in x.items():
         if var.X > 0.5:
-            duration = ordres[i]['duration']
+            duration = 1  # chaque x[i, t, m] = 1 correspond à une unité de temps
             order_id = ordres[i]['numéro']
             schedule.append({
                 'Machine': m,
                 'Start': t,
                 'Duration': duration,
-                'Order': f"Ordre {order_id}"
+                'Order': f"Ordre {order_id}",
+                'Index': i
             })
 else:
     print("Pas de solution optimale trouvée.")
-        
 
 # Regrouper par machine
-machines = sorted(set(task['Machine'] for task in schedule))
-machine_to_y = {m: idx for idx, m in enumerate(machines)}
+machines_used = sorted(set(task['Machine'] for task in schedule))
+machine_to_y = {m: idx for idx, m in enumerate(machines_used)}
+
+# Palette de couleurs unique par ordre
+unique_orders = sorted(set(task['Index'] for task in schedule))
+order_to_color = {i: plt.cm.tab20(i % 20) for i in unique_orders}
 
 # Tracer
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(12, 6))
 
-colors = plt.cm.tab20.colors  # palette de couleurs
-
-for idx, task in enumerate(schedule):
+for task in schedule:
     y = machine_to_y[task['Machine']]
+    color = order_to_color[task['Index']]
     ax.barh(y, task['Duration'], left=task['Start'], height=0.4,
-            color=colors[idx % len(colors)], edgecolor='black')
-    ax.text(task['Start'] + task['Duration']/2, y, task['Order'],
-            va='center', ha='center', fontsize=9, color='white')
+            color=color, edgecolor='black')
+    # Affichage facultatif de l'étiquette sur chaque bloc :
+    # ax.text(task['Start'] + task['Duration'] / 2, y, task['Order'],
+    #         va='center', ha='center', fontsize=8, color='white')
 
 # Axe y avec noms de machines
-ax.set_yticks(range(len(machines)))
-ax.set_yticklabels([f"Machine {m}" for m in machines])
+ax.set_yticks(range(len(machines_used)))
+ax.set_yticklabels([f"Machine {m}" for m in machines_used])
 ax.set_xlabel("Temps")
 ax.set_title("Emploi du temps des ordres par machine")
 ax.grid(True)
 
+# Légende avec une seule entrée par ordre
+legend_patches = []
+already_seen = set()
+for task in schedule:
+    idx = task['Index']
+    label = task['Order']
+    if label not in already_seen:
+        legend_patches.append(mpatches.Patch(color=order_to_color[idx], label=label))
+        already_seen.add(label)
+
+ax.legend(handles=legend_patches, title="Ordres", bbox_to_anchor=(1.05, 1), loc='upper left')
+
 plt.tight_layout()
 plt.show()
+
+
+# -
+
+
