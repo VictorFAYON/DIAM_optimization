@@ -1,9 +1,23 @@
-# +
 import gurobipy as gp
 from gurobipy import GRB
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.dates as mdates
+from datetime import datetime, timedelta
 import pandas as pd
+
+# 1) Définir automatiquement origin = maintenant
+
+# Début : au format(year,month,day,hour,minute)
+start=(2025, 7, 7, 8, 0)
+origin = datetime(start[0],start[1],start[2],start[3],start[4])
+# Fin   : au format(year,month,day,hour,minute)
+finish=(2025, 7, 12, 11, 0)
+end    = datetime(finish[0],finish[1],finish[2],finish[3],finish[4])
+
+# 2) Créneaux de 30 min
+slot_duration = timedelta(minutes=30)
+timeline = int((end - origin) / slot_duration)
 
 
 model = gp.Model("timetable_discrete")
@@ -41,7 +55,7 @@ timeline = 48
 data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
 commandes=data['OF'].unique()
 orders=[]
-for commande in orders:
+for commande in commandes:
     dico={}
     dico["référence commande"]=commande
     dico["due date"]=pd.to_datetime(data[data['OF']==commande]['Date'].iloc[0])
@@ -57,7 +71,7 @@ I        = range(len(orders))          # order indices
 M        = range(machines)             # machine indices
 T        = range(timeline)             # time indices
 K        = 10                          # tardiness weight
-due_date = [o['due date'] for o in orders]
+due_date = [int((o['due date'] - origin) / slot_duration) for o in orders]
 stamps   = [o['stamp'] for o in orders]
 
 # ---- DECISION VARIABLES ---------------------------------------------------
@@ -114,6 +128,25 @@ for m in M:
                             x[i, t, m] + x[j, t + tau, m] <= 1,
                             name=f"setup_m{m}_i{i}_j{j}_t{t}_tau{tau}"
                         )
+
+
+echelle_temporelle=0.5
+
+timeline=40
+
+Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
+
+N = len(orders)
+for i in range(N):
+    type_commande=orders[i]['cork type']
+    double_commande= "double" if orders[i]['double'] else "simple"
+    quantite_restante=orders[i]["quantité restante"]
+    if double_commande=="simple":
+        model.addConstrs(gp.quicksum(x[i,m,t]*Cadences[double_commande][type_commande]*echelle_temporelle for t in range(timeline) for m in M)==(quantite_restante//Cadences[type_commande][famille_commande]+1)*Cadences[type_commande][famille_commande])
+    if double_commande=='double':
+        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][type_commande]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][famille_commande]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>=0)
+        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][type_commande]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][famille_commande]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['simple'][famille_commande]*echelle_temporelle)
+        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][type_commande]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][famille_commande]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['double'][famille_commande]*echelle_temporelle)
 
 # ---- OBJECTIVE ------------------------------------------------------------
 model.setObjective(
