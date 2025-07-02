@@ -37,26 +37,28 @@ print(Machines)
 
 machines = 3
 timeline = 48
-ordres = [
-    {'numéro': 1, 'duration': 2, 'due date': 10,'stamp':1}, {'numéro': 2, 'duration': 2, 'due date': 10,'stamp':1},
-    {'numéro': 3, 'duration': 1, 'due date': 10,'stamp':1}, {'numéro': 4, 'duration': 2, 'due date': 10,'stamp':1},
-    {'numéro': 5, 'duration': 3, 'due date': 15,'stamp':1}, {'numéro': 6, 'duration': 4, 'due date': 15,'stamp':1},
-    {'numéro': 7, 'duration': 2, 'due date': 20,'stamp':1}, {'numéro': 8, 'duration': 4, 'due date': 20,'stamp':1},
-    {'numéro': 9, 'duration': 2, 'due date': 30,'stamp':1}, {'numéro': 10, 'duration': 2, 'due date': 30,'stamp':1},
-    {'numéro': 11, 'duration': 2, 'due date': 30,'stamp':1}, {'numéro': 12, 'duration': 2, 'due date': 30,'stamp':1},
-    {'numéro': 13, 'duration': 10, 'due date': 40,'stamp':1}, {'numéro': 14, 'duration': 2, 'due date': 45,'stamp':1},
-    {'numéro': 15, 'duration': 8, 'due date': 40,'stamp':1}, {'numéro': 16, 'duration': 5, 'due date': 40,'stamp':1},
-    {'numéro': 17, 'duration': 2, 'due date': 35,'stamp':1}, {'numéro': 18, 'duration': 12, 'due date': 30,'stamp':1},
-    {'numéro': 19, 'duration': 2, 'due date': 30,'stamp':1}, {'numéro': 20, 'duration': 3, 'due date': 30,'stamp':1}
-]
+
+data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
+commandes=data['OF'].unique()
+orders=[]
+for commande in orders:
+    dico={}
+    dico["référence commande"]=commande
+    dico["due date"]=pd.to_datetime(data[data['OF']==commande]['Date'].iloc[0])
+    dico["quantité restante"]=data[data['OF']==commande]['Remaining_Qty'].iloc[0]
+    dico["cork type"]=data[data['OF']==commande]['Family'].iloc[0]
+    dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
+    dico["stamp"] = 1
+    orders.append(dico)
+print(orders)
 
 # ---- PARAMETERS -----------------------------------------------------------
-I        = range(len(ordres))          # order indices
+I        = range(len(orders))          # order indices
 M        = range(machines)             # machine indices
 T        = range(timeline)             # time indices
 K        = 10                          # tardiness weight
-due_date = [o['due date'] for o in ordres]
-stamps   = [o['stamp'] for o in ordres]
+due_date = [o['due date'] for o in orders]
+stamps   = [o['stamp'] for o in orders]
 
 # ---- DECISION VARIABLES ---------------------------------------------------
 # assignment: x[i,t,m] == 1 if order i processed on machine m at time t
@@ -93,7 +95,7 @@ for i in I:
     
 #-----------------------------------------------------------------------------
 
-setup_time = [[1]*len(ordres) for _ in ordres]
+setup_time = [[1]*len(orders) for _ in orders]
 
 
 # --- CHANGING TIME-----------------------------------------------------------
@@ -119,7 +121,7 @@ model.setObjective(
     GRB.MINIMIZE
 )
 
-for i, ordre in enumerate(ordres):
+for i, ordre in enumerate(orders):
     model.addConstr(
         gp.quicksum(x[i, t, m] for m in range(machines)
                     for t in range(ordre['due date'])) == ordre['duration'],name=f"assign_{i}")
@@ -129,7 +131,7 @@ for m in range(machines):
         model.addConstr(
             gp.quicksum(
                 x[i, t, m]
-                for i, ordre in enumerate(ordres) )<= 1,
+                for i, ordre in enumerate(orders) )<= 1,
             name=f"machine_{m}time{t}")
 
 model.optimize()
@@ -144,7 +146,7 @@ if model.status == GRB.OPTIMAL:
     for (i, t, m), var in x.items():
         if var.X > 0.5:
             duration = 1  # chaque x[i, t, m] = 1 correspond à une unité de temps
-            order_id = ordres[i]['numéro']
+            order_id = orders[i]['numéro']
             schedule.append({
                 'Machine': m,
                 'Start': t,
@@ -209,7 +211,7 @@ for task in schedule:
         finishing_times[task['Index']]=task['Index']+task['Duration']
         
 avance=[0 for _ in range(len(finishing_times))]
-for ordre in ordres:
+for ordre in orders:
     avance[ordre['numéro']-1]=ordre['due date']-finishing_times[ordre['numéro']-1]
     
 indices = [i+1 for i in range(len(finishing_times))]
