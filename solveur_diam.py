@@ -138,15 +138,15 @@ Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
 
 N = len(orders)
 for i in range(N):
-    type_commande=orders[i]['cork type']
-    double_commande= "double" if orders[i]['double'] else "simple"
+    cork_type=orders[i]['cork type']
+    double = "double" if orders[i]['double'] else "simple"
     quantite_restante=orders[i]["quantité restante"]
-    if double_commande=="simple":
-        model.addConstrs(gp.quicksum(x[i,m,t]*Cadences[double_commande][type_commande]*echelle_temporelle for t in range(timeline) for m in M)==(quantite_restante//Cadences[type_commande][famille_commande]+1)*Cadences[type_commande][famille_commande])
-    if double_commande=='double':
-        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][type_commande]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][famille_commande]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>=0)
-        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][type_commande]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][famille_commande]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['simple'][famille_commande]*echelle_temporelle)
-        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][type_commande]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][famille_commande]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['double'][famille_commande]*echelle_temporelle)
+    if double=="simple":
+        model.addConstrs(gp.quicksum(x[i,m,t]*Cadences[double][cork_type]*echelle_temporelle for t in range(timeline) for m in M)==(quantite_restante//Cadences[double][cork_type]+1)*Cadences[double][cork_type])
+    if double=='double':
+        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][cork_type]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][cork_type]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>=0)
+        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][cork_type]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][cork_type]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['simple'][cork_type]*echelle_temporelle)
+        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][cork_type]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][cork_type]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['double'][cork_type]*echelle_temporelle)
 
 # ---- OBJECTIVE ------------------------------------------------------------
 model.setObjective(
