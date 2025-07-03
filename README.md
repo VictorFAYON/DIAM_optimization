@@ -40,3 +40,9 @@ pandas
 datetime
 gurobipy
 
+## d) Stable Version Commit
+
+The stable and validated version of this project corresponds to the following commit hash:
+
+{insert hash}
+
