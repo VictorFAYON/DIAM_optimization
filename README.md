@@ -33,12 +33,10 @@ $$
 
 We used **Gurobi** as the optimization solver (with a free academic license).  
 The following Python libraries are also required:
-
-```bash
 matplotlib
 pandas
 datetime
-gurobipy```
+gurobipy
 
 ## d) Stable Version Commit
 
