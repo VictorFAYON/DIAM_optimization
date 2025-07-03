@@ -6,7 +6,7 @@ Ce projet consiste à développer un algorithme d’optimisation permettant de s
 L’objectif est de minimiser les retards de livraison, de faciliter la planification de la production et de permettre des ajustements dynamiques en cas d’imprévus (pannes machines, nouvelles commandes, etc.).
 
 ## b) Choix techniques
-- Fonction coût : \[Cost = k_1\displaystyle\sum_{i} t_{early}(i)^{2} + k_2\displaystyle\sum_{i}t_{late}(i)^{2} + k_3\cdot nb_{changes}\] 
+- Fonction coût : $\[Cost = k_1\displaystyle\sum_{i} t_{early}(i)^{2} + k_2\displaystyle\sum_{i}t_{late}(i)^{2} + k_3\cdot nb_{changes}\]$ 
 - Contraintes :
   - 
 - Hypothèse simplificatrice: 
