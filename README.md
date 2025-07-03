@@ -33,10 +33,10 @@ $$
 
 We used **Gurobi** as the optimization solver (with a free academic license).  
 The following Python libraries are also required:
-matplotlib
-pandas
-datetime
-gurobipy
+matplotlib  
+pandas  
+datetime  
+gurobipy  
 
 ## d) Stable Version Commit
 
