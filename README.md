@@ -32,7 +32,7 @@ $$
 ## c) Required Tools and Libraries
 
 We used **Gurobi** as the optimization solver (with a free academic license).  
-The following Python libraries are also required:
+The following Python libraries are also required:  
 matplotlib  
 pandas  
 datetime  
