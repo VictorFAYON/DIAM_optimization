@@ -9,10 +9,17 @@ The objective is to minimize delivery delays, simplify production planning, and 
 
 - **Cost function**:
 
-  $$
+$$
   \text{Cost} = k_1 \sum_i t_{\text{early}}(i)^2 + k_2 \sum_i t_{\text{late}}(i)^2 + k_3 \cdot \text{nb}_{\text{changes}}
   $$
-  $$k_1 = 1 \quad k_2=10\quad k_3=1000\quad \text{Note that these values were chosen arbitrarily and can easily be modified}$$
+
+  Where:
+
+  - \( k_1 = 1 \)
+  - \( k_2 = 10 \)
+  - \( k_3 = 1000 \)
+
+  > Note: These values were chosen arbitrarily and can be easily adjusted as needed.
 - **Constraints**:
   - Only one manufacturing order (OF) can be processed at a time on each machine.
   - Double-printed corks can be printed either once on a dual-head machine or twice on a single-head machine.
