@@ -24,8 +24,9 @@ $$
   > Note: These values were chosen arbitrarily and can be easily adjusted as needed.
 - **Constraints**:
   - Only one manufacturing order (OF) can be processed at a time on each machine.
-  - Double-printed corks can be printed either once on a dual-head machine or twice on a single-head machine.
   - A maximum of two machines can work on the same OF simultaneously, due to the availability of only two printing supports per OF.
+  - Double-printed corks can be printed either once on a dual-head machine or twice on a single-head machine.
+  
 
 - **Simplifying Assumptions**:
   - Time has been discretized using a 30-minute time step. Note: this step size can be easily adjusted if needed.
