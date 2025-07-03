@@ -14,9 +14,9 @@ $$
   $$
 
   Where:
-  - i represents the index of the order
-  - t_{\text{early}}(i) represents the advance with which the order i is ended
-  - t_{\text{late}}(i) represents the delay with which the order i is ended
+  - $i$ represents the index of the order
+  - $t_{\text{early}}(i)$ represents the advance with which the order i is ended
+  - $t_{\text{late}}(i)$ represents the delay with which the order i is ended
   - \( k_1 = 1 \)
   - \( k_2 = 10 \)
   - \( k_3 = 1000 \)
