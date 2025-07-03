@@ -38,7 +38,7 @@ The following Python libraries are also required:
 matplotlib
 pandas
 datetime
-gurobipy
+gurobipy```
 
 ## d) Stable Version Commit
 
