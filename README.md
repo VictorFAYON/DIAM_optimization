@@ -2,7 +2,7 @@
 
 ## a) Project Description
 
-This project aims to develop an optimization algorithm to efficiently sequence manufacturing orders in a factory.  
+This project aims to develop an optimization algorithm to efficiently sequence manufacturing orders in a cork factory (DIAM).  
 The objective is to minimize delivery delays, simplify production planning, and allow for dynamic adjustments in case of unforeseen events (e.g., machine breakdowns, urgent new orders, etc.).
 
 ## b) Technical Choices
