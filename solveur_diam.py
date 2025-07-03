@@ -28,6 +28,7 @@ data = pd.read_csv('Machine_Cadence.csv', sep=';', encoding='cp1252')
 data.drop( data [data['Cork Type']=='MGF'].index, inplace=True)
 
 
+#Liste des machines fonctionelles 
 fire_machines=[]
 all_machines=list(data['Machine'].unique())
 for m in all_machines:
@@ -60,13 +61,12 @@ orders=[]
 for commande in commandes:
     dico={}
     dico["référence commande"]=commande
-    dico["due date"]=pd.to_datetime(data[data['OF']==commande]['Date'].iloc[0])
+    dico["due date"]=pd.to_datetime(data[data['OF']==commande]['Date'].iloc[0],dayfirst = True)
     dico["quantité restante"]=data[data['OF']==commande]['Remaining_Qty'].iloc[0]
     dico["cork type"]=data[data['OF']==commande]['Family'].iloc[0]
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
-print(orders)
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
@@ -85,39 +85,46 @@ x = model.addVars(I, T, M, vtype=GRB.BINARY, name="x")
 # completion times
 C = model.addVars(I, vtype=GRB.INTEGER, name="C")
 
+# +
+
 # tardiness ≥ max{0, C_i − d_i}, earliness ≥ max{0, d_i − C_i}
 Tvar = model.addVars(I, vtype=GRB.CONTINUOUS, name="T")   # tardiness
 Evar = model.addVars(I, vtype=GRB.CONTINUOUS, name="E")   # earliness
+# -
 
+"""
 # ---- COMPLETION‑TIME DEFINITION -------------------------------------------
 for i in I:
     for t in T:
         for m in M:
             # If any (t,m) is chosen, C_i must be at least that t
             model.addConstr(C[i] >= t * x[i, t, m])
+"""
 
+"""
 # ---- TARDINESS / EARLINESS DEFINITION -------------------------------------
 for i in I:
     # T_i ≥ C_i − d_i
     model.addConstr(Tvar[i] >= C[i] - due_date[i])
     # E_i ≥ d_i − C_i
     model.addConstr(Evar[i] >= due_date[i] - C[i])
+"""
 
 # ---- MAXIMUM MACHINES RUNNING AT THE SAME TIME ----------------------------
 
-for i in I:
+"""for i in I:
     for t in T:
         # Sum on m x_imt<= number of stamps
-        model.addConstr(gp.quicksum(x[i,t,m] for m in M)<=stamps[i])
+        model.addConstr(gp.quicksum(x[i,t,m] for m in M)<=stamps[i])"""
 
-    
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 
 setup_time = [[1]*len(orders) for _ in orders]
 
 
 # --- CHANGING TIME-----------------------------------------------------------
-for m in M:
+""""for m in M:
     for i in I:
         for j in I:
             if i == j: 
@@ -137,6 +144,8 @@ timeline=400
 
 Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
 
+# +
+
 N = len(orders)
 for i in range(N):
     cork_type=orders[i]['cork type']
@@ -153,7 +162,7 @@ for i in range(N):
                                      for t in range(timeline) 
                                      for m in M 
                                      if list(machines[m])[0][:3]=='MIX')+
-                                     gp.quicksum(0.5*x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle 
+                                     gp.quicksum(x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle
                                                  for t in range(timeline) 
                                                  for m in M 
                                                  if list(machines[m])[0][:3]=='VTF')-quantite_restante>=0)
@@ -227,7 +236,7 @@ for task in schedule:
     color = order_to_color[task['Index']]
     ax.barh(y, task['Duration'], left=task['Start'], height=0.4,
             color=color, edgecolor='black')
-    
+
 # Affichage facultatif de l'étiquette sur chaque bloc :
 # ax.text(task['Start'] + task['Duration'] / 2, y, task['Order'],
 #         va='center', ha='center', fontsize=8, color='white')
@@ -261,12 +270,12 @@ for task in schedule:
             finishing_times[task['Index']]=task['Index']+task['Duration']
     else:
         finishing_times[task['Index']]=task['Index']+task['Duration']
-        
+
 avance=[]
 for ordre in orders:
     print(ordre['référence commande'])
     avance.append(ordre['due date']-finishing_times[ordre['référence commande']-1])
-    
+
 indices = [i+1 for i in range(len(finishing_times))]
 legendes = [f'Ordre{i+1}' for i in range(len(finishing_times))]
 plt.bar(indices, avance, color='blue', edgecolor='black')
@@ -279,3 +288,5 @@ plt.ylabel("Durée totale")
 plt.title("Durée par ordre")
 plt.tight_layout()
 plt.show()
+
+
