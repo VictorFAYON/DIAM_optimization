@@ -6,7 +6,19 @@ This project aims to develop an optimization algorithm to efficiently sequence m
 The objective is to minimize delivery delays, simplify production planning, and allow for dynamic adjustments in case of unforeseen events (e.g., machine breakdowns, urgent new orders, etc.).
 
 ## b) Technical Choices
+- **Variables**
+  - $x(i,m,t)=1$ if the task i is being done on the machine m at the time t
+  - $x(i,m,t) =0$ otherwise
+(This variable registers all the necessary information to build the OF time schedule.)
+  - $t_{\text{early}}(i)$ represents the advance with which the order i is ended
+  - $t_{\text{early}}(i)$ represents the advance with which the order i is ended
+  - $\text{nb}_{\text{changes}}$ represents the number of machine changes
+  - \( k_1 = 1 \)
+  - \( k_2 = 10 \)
+  - \( k_3 = 1000 \)
+  -  \( k_4 = 100 \)
 
+  > Note: These values were chosen arbitrarily and can be easily adjusted as needed.
 - **Cost function**:
 
 $$
@@ -33,11 +45,8 @@ $$
 - **Simplifying Assumptions**:
   - Time has been discretized using a 30-minute time step. Note: this step size can be easily adjusted if needed.
   - A constant changeover time of 30 minutes is assumed between two different OFs.
- 
-## c) Variable used
-We have introduced a set of variables x[i,t,m]\
-The variable x[i,t,m] is equal to one if the task i is realized by the machine m at the time t and 0 otherwise
-## d) Required Tools and Libraries
+    
+## c) Required Tools and Libraries
 
 We used **Gurobi** as the optimization solver (with a free academic license).  
 The following Python libraries are also required:  
@@ -46,7 +55,7 @@ pandas
 datetime  
 gurobipy  
 
-## e) Stable Version Commit
+## d) Stable Version Commit
 
 The stable and validated version of this project corresponds to the following commit hash:
 
