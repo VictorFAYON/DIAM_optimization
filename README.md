@@ -31,8 +31,11 @@ $$
 - **Simplifying Assumptions**:
   - Time has been discretized using a 30-minute time step. Note: this step size can be easily adjusted if needed.
   - A constant changeover time of 30 minutes is assumed between two different OFs.
-
-## c) Required Tools and Libraries
+ 
+## c) Variable used
+We have introduced a set of variables x[i,t,m]\
+The variable x[i,t,m] is equal to one if the task i is realized by the machine m at the time t and 0 otherwise
+## d) Required Tools and Libraries
 
 We used **Gurobi** as the optimization solver (with a free academic license).  
 The following Python libraries are also required:  
@@ -41,7 +44,7 @@ pandas
 datetime  
 gurobipy  
 
-## d) Stable Version Commit
+## e) Stable Version Commit
 
 The stable and validated version of this project corresponds to the following commit hash:
 
