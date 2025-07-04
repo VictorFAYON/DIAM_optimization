@@ -52,13 +52,13 @@ for machine in fire_machines:
 
 # supprimer une des machines
 
-n_machines = 2
+n_machines = 13
 
 data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
 data["Date"] = pd.to_datetime(data["Date"], dayfirst=True)
 data = data.sort_values(by="Date")
-data = data.head(10)
-print(data.head())
+data = data.head(20)
+# print(data.head())
 
 commandes=data['OF'].unique()
 orders=[]
@@ -71,16 +71,16 @@ for commande in commandes:
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
-print(orders)
+# print(orders)
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
 M        = range(n_machines)             # machine indices
 T        = range(timeline)             # time indices
-Kret        = 1000
-Kav = 1000
-Kchange = 1000
-K_surplus = 1000
+Kret        = 0.1
+Kav = 0.01
+Kchange = 1
+K_surplus = 0.1
 due_date = [int((o['due date'] - origin) / slot_duration) for o in orders]
 stamps   = [o['stamp'] for o in orders]
 
@@ -139,15 +139,10 @@ setup_time = [[1]*len(orders) for _ in orders]
 # --- CHANGING TIME-----------------------------------------------------------
 for m in M:
     for i in I:
-
-        
-        if machines[m][0][:3]=='MIX' and orders[i]['double']:
+        if list(machines[m])[0][:3]=='MIX' and orders[i]['double']:
             t_sup=1
         else:
             t_sup=0
-
-
-
         for j in I:
             if i == j: 
                 continue
@@ -155,7 +150,7 @@ for m in M:
             # si setup_time=0, pas besoin de contraindre
             if s_ij > 0:
                 # pour tout t où t + s_ij reste dans l'horizon
-                for t in range(timeline - s_ij):
+                for t in range(timeline - s_ij-1-t_sup):
                     for tau in range(1, s_ij+1+t_sup):
                         model.addConstr(
                             x[i, t, m] + x[j, t + tau, m] <= 1,
@@ -261,6 +256,7 @@ x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
 )
 
 # --- OPTIMIZATION ----------------------------------------------------------
+model.Params.MIPGap = 0.05
 model.optimize()
 
 
