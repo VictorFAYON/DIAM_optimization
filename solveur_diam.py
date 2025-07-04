@@ -67,14 +67,16 @@ for commande in commandes:
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
+orders = orders[:5]
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
 M        = range(n_machines)             # machine indices
 T        = range(timeline)             # time indices
-Kret        = 10
-Kav = 1
+Kret        = 1000
+Kav = 1000
 Kchange = 1000
+K_surplus = 1000
 due_date = [int((o['due date'] - origin) / slot_duration) for o in orders]
 stamps   = [o['stamp'] for o in orders]
 
@@ -82,40 +84,46 @@ stamps   = [o['stamp'] for o in orders]
 # assignment: x[i,t,m] == 1 if order i processed on machine m at time t
 x = model.addVars(I, T, M, vtype=GRB.BINARY, name="x")
 
+# +
+
 # completion times
 C = model.addVars(I, vtype=GRB.INTEGER, name="C")
+
 
 # +
 
 # tardiness ≥ max{0, C_i − d_i}, earliness ≥ max{0, d_i − C_i}
 Tvar = model.addVars(I, vtype=GRB.CONTINUOUS, name="T")   # tardiness
 Evar = model.addVars(I, vtype=GRB.CONTINUOUS, name="E")   # earliness
-# -
 
-"""
+
+# +
+
 # ---- COMPLETION‑TIME DEFINITION -------------------------------------------
 for i in I:
     for t in T:
         for m in M:
             # If any (t,m) is chosen, C_i must be at least that t
             model.addConstr(C[i] >= t * x[i, t, m])
-"""
 
-"""
+
+# +
+
 # ---- TARDINESS / EARLINESS DEFINITION -------------------------------------
 for i in I:
     # T_i ≥ C_i − d_i
     model.addConstr(Tvar[i] >= C[i] - due_date[i])
     # E_i ≥ d_i − C_i
     model.addConstr(Evar[i] >= due_date[i] - C[i])
-"""
+
+# -
 
 # ---- MAXIMUM MACHINES RUNNING AT THE SAME TIME ----------------------------
 
-"""for i in I:
+for i in I:
     for t in T:
         # Sum on m x_imt<= number of stamps
-        model.addConstr(gp.quicksum(x[i,t,m] for m in M)<=stamps[i])"""
+        model.addConstr(gp.quicksum(x[i,t,m] for m in M)<=stamps[i])
 
 
 # -----------------------------------------------------------------------------
@@ -123,8 +131,9 @@ for i in I:
 setup_time = [[1]*len(orders) for _ in orders]
 
 
+# +
 # --- CHANGING TIME-----------------------------------------------------------
-""""for m in M:
+for m in M:
     for i in I:
         for j in I:
             if i == j: 
@@ -140,11 +149,11 @@ setup_time = [[1]*len(orders) for _ in orders]
                             name=f"setup_m{m}_i{i}_j{j}_t{t}_tau{tau}"
                         )
 
-timeline=400
+timeline=200
 
 Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
 
-# +
+# # +
 
 N = len(orders)
 for i in range(N):
@@ -166,14 +175,14 @@ for i in range(N):
                                                  for t in range(timeline) 
                                                  for m in M 
                                                  if list(machines[m])[0][:3]=='VTF')-quantite_restante>=0)
-        model.addConstr(gp.quicksum(0.5*x[i,t,m]*
+        """model.addConstr(gp.quicksum(0.5*x[i,t,m]*
                                     Cadences['simple'][cork_type]*echelle_temporelle 
                                     for t in range(timeline) 
                                     for m in M if list(machines[m])[0][:3]=='MIX')+
                                     gp.quicksum(0.5*x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle 
                                                 for t in range(timeline) 
                                                 for m in M if list(machines[m])[0][:3]=='VTF')-quantite_restante<=
-                                                    (C.  adences['simple'][cork_type]*echelle_temporelle)*0.5+Cadences['double'][cork_type]*echelle_temporelle+1)
+                                                    (C.  adences['simple'][cork_type]*echelle_temporelle)*0.5+Cadences['double'][cork_type]*echelle_temporelle+1)"""
 
 # for i, ordre in enumerate(orders):
 #     model.addConstr(
@@ -191,7 +200,24 @@ for m in range(n_machines):
 # ---- OBJECTIVE ------------------------------------------------------------
 model.setObjective(
     Kret * gp.quicksum(Tvar[i]**2 for i in I) + Kav*gp.quicksum(Evar[i]**2 for i in I)+ 
-    Kchange*gp.quicksum((x[i,t,m]-x[i,t+1,m])*(x[i,t,m]-x[i,t+1,m]) for t in range(timeline-1) for m in M for i in I),
+    Kchange*gp.quicksum((x[i,t,m]-x[i,t+1,m])*(x[i,t,m]-x[i,t+1,m]) for t in range(timeline-1) for m in M for i in I)+K_surplus* gp.quicksum(
+    gp.quicksum(
+        0.5 * x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'MIX'
+    )
+    +
+    gp.quicksum(
+        0.5 * x[i, t, m] * Cadences['double'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'VTF'
+    )
+    -
+    float(orders[i]["quantité restante"].replace(',', '.')) * 1000
+    for i in range(N)
+),
     GRB.MINIMIZE
 )
 
@@ -218,7 +244,7 @@ if model.status == GRB.OPTIMAL:
             })
 else:
     print("Pas de solution optimale trouvée.")
-print(schedule)
+
 
 # Regrouper par machine
 machines_used = sorted(set(task['Machine'] for task in schedule))
@@ -288,5 +314,12 @@ plt.ylabel("Durée totale")
 plt.title("Durée par ordre")
 plt.tight_layout()
 plt.show()
+
+
+# -
+
+
+
+
 
 
