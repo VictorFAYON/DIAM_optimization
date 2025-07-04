@@ -53,7 +53,7 @@ for machine in fire_machines:
 # supprimer une des machines
 
 n_machines = 13
-timeline = 3000
+
 
 data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
 commandes=data['OF'].unique()
@@ -67,7 +67,7 @@ for commande in commandes:
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
-orders = orders[:5]
+orders = orders[3:7]
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
@@ -149,7 +149,7 @@ for m in M:
                             name=f"setup_m{m}_i{i}_j{j}_t{t}_tau{tau}"
                         )
 
-timeline=200
+
 
 Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
 
@@ -161,10 +161,15 @@ for i in range(N):
     double = "double" if orders[i]['double'] else "simple"
     quantite_restante=float(orders[i]["quantité restante"].replace(',', '.'))*1000
     if double=="simple":
-        model.addConstr(gp.quicksum(x[i,t,m]*Cadences[double][cork_type]*echelle_temporelle 
-                                    for t in range(timeline) 
-                                    for m in M)
-                                    ==(quantite_restante//Cadences[double][cork_type]+1)*Cadences[double][cork_type])
+        model.addConstr(gp.quicksum(x[i,t,m]*
+                                     Cadences['simple'][cork_type]*echelle_temporelle
+                                     for t in range(timeline)
+                                     for m in M
+                                     if list(machines[m])[0][:3]=='MIX')+
+                                     gp.quicksum(x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle
+                                                 for t in range(timeline)
+                                                 for m in M
+                                                 if list(machines[m])[0][:3]=='VTF')-quantite_restante>=0)
     else:
         model.addConstr(gp.quicksum(0.5*x[i,t,m]*
                                      Cadences['simple'][cork_type]*echelle_temporelle 
@@ -200,7 +205,7 @@ for m in range(n_machines):
 # ---- OBJECTIVE ------------------------------------------------------------
 model.setObjective(
     Kret * gp.quicksum(Tvar[i]**2 for i in I) + Kav*gp.quicksum(Evar[i]**2 for i in I)+ 
-    Kchange*gp.quicksum((x[i,t,m]-x[i,t+1,m])*(x[i,t,m]-x[i,t+1,m]) for t in range(timeline-1) for m in M for i in I)+K_surplus* gp.quicksum(
+    Kchange*gp.quicksum((x[i,t,m]-x[i,t+1,m])*(x[i,t,m]-x[i,t+1,m]) for t in range(timeline-1) for m in M for i in I)+K_surplus* (gp.quicksum(
     gp.quicksum(
         0.5 * x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
         for t in range(timeline)
@@ -216,8 +221,29 @@ model.setObjective(
     )
     -
     float(orders[i]["quantité restante"].replace(',', '.')) * 1000
-    for i in range(N)
-),
+    for i in range(N) if orders[i]['double']==1
+)
+ 
++
+ 
+gp.quicksum(
+    gp.quicksum(
+x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'MIX'
+    )
+    +
+    gp.quicksum(
+     x[i, t, m] * Cadences['double'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'VTF'
+    )
+    -
+    float(orders[i]["quantité restante"].replace(',', '.')) * 1000
+    for i in range(N) if orders[i]['double']==0
+)),
     GRB.MINIMIZE
 )
 
@@ -251,7 +277,7 @@ days = []
 # lundi 7 juillet 2025 à 8h
 current = origin
 # jusqu'au samedi 12 juillet 2025 à 11h
-end_day = datetime(2025,8,12,11,0)
+end_day = end
 
 # on crée une liste de tuples (day_name, day_start, day_end)
 while current < end_day:
@@ -306,3 +332,6 @@ fig.legend(handles=legend_patches, title="Ordres",
            bbox_to_anchor=(1.02, 0.5), loc='center left')
 plt.tight_layout(rect=[0,0,0.85,1])
 plt.show()
+# -
+
+
