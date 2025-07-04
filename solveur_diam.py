@@ -54,20 +54,24 @@ for machine in fire_machines:
 
 n_machines = 13
 
-
 data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
+data["Date"] = pd.to_datetime(data["Date"], dayfirst=True)
+data = data.sort_values(by="Date")
+data = data.head(10)
+print(data.head())
+
 commandes=data['OF'].unique()
 orders=[]
 for commande in commandes:
     dico={}
     dico["référence commande"]=commande
-    dico["due date"]=pd.to_datetime(data[data['OF']==commande]['Date'].iloc[0],dayfirst = True)
+    dico["due date"]=data[data['OF']==commande]['Date'].iloc[0]
     dico["quantité restante"]=data[data['OF']==commande]['Remaining_Qty'].iloc[0]
     dico["cork type"]=data[data['OF']==commande]['Family'].iloc[0]
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
-orders = orders[3:7]
+print(orders)
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
@@ -151,7 +155,7 @@ for m in M:
 
 
 
-Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
+Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750, 'VE':0}}
 
 # # +
 
