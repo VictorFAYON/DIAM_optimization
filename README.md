@@ -7,9 +7,9 @@ The objective is to minimize delivery delays, simplify production planning, and 
 
 ## b) Technical Choices
 - **Variables**
-  - $x(i,m,t)=1$ \text{if the task i is being done on the machine m at the time t}\\
+  - $x(i,m,t)=1$ if the task i is being done on the machine m at the time t}\\
 
-  - $x(i,m,t) =0$ \text{otherwise}\\
+  - $x(i,m,t) =0$ otherwise\\
 \text{This variable registers all the necessary information to build the OF time schedule.}\\
   - $t_{\text{early}}(i)$ represents the advance with which the order i is ended
   - $t_{\text{early}}(i)$ represents the advance with which the order i is ended
