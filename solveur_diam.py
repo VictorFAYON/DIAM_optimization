@@ -12,7 +12,7 @@ import pandas as pd
 start=(2025, 7, 7, 8, 0)
 origin = datetime(start[0],start[1],start[2],start[3],start[4])
 # Fin   : au format(year,month,day,hour,minute)
-finish=(2025, 7, 12, 11, 0)
+finish=(2025, 7, 14, 11, 0)
 end    = datetime(finish[0],finish[1],finish[2],finish[3],finish[4])
 
 # 2) Créneaux de 30 min
@@ -52,7 +52,7 @@ for machine in fire_machines:
 
 # supprimer une des machines
 
-n_machines = 13
+n_machines = 2
 
 data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
 data["Date"] = pd.to_datetime(data["Date"], dayfirst=True)
@@ -139,6 +139,15 @@ setup_time = [[1]*len(orders) for _ in orders]
 # --- CHANGING TIME-----------------------------------------------------------
 for m in M:
     for i in I:
+
+        
+        if machines[m][0][:3]=='MIX' and orders[i]['double']:
+            t_sup=1
+        else:
+            t_sup=0
+
+
+
         for j in I:
             if i == j: 
                 continue
@@ -147,7 +156,7 @@ for m in M:
             if s_ij > 0:
                 # pour tout t où t + s_ij reste dans l'horizon
                 for t in range(timeline - s_ij):
-                    for tau in range(1, s_ij+1):
+                    for tau in range(1, s_ij+1+t_sup):
                         model.addConstr(
                             x[i, t, m] + x[j, t + tau, m] <= 1,
                             name=f"setup_m{m}_i{i}_j{j}_t{t}_tau{tau}"
