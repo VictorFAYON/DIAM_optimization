@@ -10,7 +10,7 @@ The objective is to minimize delivery delays, simplify production planning, and 
 - **Cost function**:
 
 $$
-  \text{Cost} = k_1 \sum_i t_{\text{early}}(i)^2 + k_2 \sum_i t_{\text{late}}(i)^2 + k_3 \cdot \text{nb}_{\text{changes}}
+  \text{Cost} = k_1 \sum_i t_{\text{early}}(i)^2 + k_2 \sum_i t_{\text{late}}(i)^2 + k_3 \cdot \text{nb}_{\text{changes}} + k_4 . surplus
   $$
 
   Where:
@@ -20,6 +20,7 @@ $$
   - \( k_1 = 1 \)
   - \( k_2 = 10 \)
   - \( k_3 = 1000 \)
+  -  -\( k_4 = 100 \)
 
   > Note: These values were chosen arbitrarily and can be easily adjusted as needed.
 - **Constraints**:
