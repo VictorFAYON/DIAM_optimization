@@ -20,7 +20,7 @@ $$
   - \( k_1 = 1 \)
   - \( k_2 = 10 \)
   - \( k_3 = 1000 \)
-  -  -\( k_4 = 100 \)
+  -  \( k_4 = 100 \)
 
   > Note: These values were chosen arbitrarily and can be easily adjusted as needed.
 - **Constraints**:
