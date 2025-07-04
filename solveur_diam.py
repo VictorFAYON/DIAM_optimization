@@ -12,11 +12,12 @@ import pandas as pd
 start=(2025, 7, 7, 8, 0)
 origin = datetime(start[0],start[1],start[2],start[3],start[4])
 # Fin   : au format(year,month,day,hour,minute)
-finish=(2025, 7, 12, 11, 0)
+finish=(2025, 7, 14, 11, 0)
 end    = datetime(finish[0],finish[1],finish[2],finish[3],finish[4])
 
 # 2) Créneaux de 30 min
-slot_duration = timedelta(minutes=30)
+echelle_temporelle=0.5
+slot_duration = timedelta(minutes=60*echelle_temporelle)
 timeline = int((end - origin) / slot_duration)
 
 
@@ -27,13 +28,14 @@ data = pd.read_csv('Machine_Cadence.csv', sep=';', encoding='cp1252')
 data.drop( data [data['Cork Type']=='MGF'].index, inplace=True)
 
 
+#Liste des machines fonctionelles 
 fire_machines=[]
 all_machines=list(data['Machine'].unique())
 for m in all_machines:
     if m[:3]!='LAS':#Non-laser Machine
         fire_machines.append(m)
 
-Machines=[]
+machines=[]
 
 for machine in fire_machines:
     dico={}
@@ -43,34 +45,42 @@ for machine in fire_machines:
     for i in range(n):
         L.append({a.iloc[i]:data[data['Machine']==fire_machines[0]]['Cadence'].iloc[i]})
     dico[f'{machine}']=L
-    Machines.append(dico)
+    machines.append(dico)
 
-print(Machines)
+# print(machines)
+
 
 # supprimer une des machines
 
-machines = 3
-timeline = 48
+n_machines = 13
 
 data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
+data["Date"] = pd.to_datetime(data["Date"], dayfirst=True)
+data = data.sort_values(by="Date")
+data = data.head(20)
+# print(data.head())
+
 commandes=data['OF'].unique()
 orders=[]
 for commande in commandes:
     dico={}
     dico["référence commande"]=commande
-    dico["due date"]=pd.to_datetime(data[data['OF']==commande]['Date'].iloc[0])
+    dico["due date"]=data[data['OF']==commande]['Date'].iloc[0]
     dico["quantité restante"]=data[data['OF']==commande]['Remaining_Qty'].iloc[0]
     dico["cork type"]=data[data['OF']==commande]['Family'].iloc[0]
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
-print(orders)
+# print(orders)
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
-M        = range(machines)             # machine indices
+M        = range(n_machines)             # machine indices
 T        = range(timeline)             # time indices
-K        = 10                          # tardiness weight
+Kret        = 0.1
+Kav = 0.01
+Kchange = 1
+K_surplus = 0.1
 due_date = [int((o['due date'] - origin) / slot_duration) for o in orders]
 stamps   = [o['stamp'] for o in orders]
 
@@ -78,12 +88,20 @@ stamps   = [o['stamp'] for o in orders]
 # assignment: x[i,t,m] == 1 if order i processed on machine m at time t
 x = model.addVars(I, T, M, vtype=GRB.BINARY, name="x")
 
+# +
+
 # completion times
 C = model.addVars(I, vtype=GRB.INTEGER, name="C")
+
+
+# +
 
 # tardiness ≥ max{0, C_i − d_i}, earliness ≥ max{0, d_i − C_i}
 Tvar = model.addVars(I, vtype=GRB.CONTINUOUS, name="T")   # tardiness
 Evar = model.addVars(I, vtype=GRB.CONTINUOUS, name="E")   # earliness
+
+
+# +
 
 # ---- COMPLETION‑TIME DEFINITION -------------------------------------------
 for i in I:
@@ -92,12 +110,17 @@ for i in I:
             # If any (t,m) is chosen, C_i must be at least that t
             model.addConstr(C[i] >= t * x[i, t, m])
 
+
+# +
+
 # ---- TARDINESS / EARLINESS DEFINITION -------------------------------------
 for i in I:
     # T_i ≥ C_i − d_i
     model.addConstr(Tvar[i] >= C[i] - due_date[i])
     # E_i ≥ d_i − C_i
     model.addConstr(Evar[i] >= due_date[i] - C[i])
+
+# -
 
 # ---- MAXIMUM MACHINES RUNNING AT THE SAME TIME ----------------------------
 
@@ -106,15 +129,20 @@ for i in I:
         # Sum on m x_imt<= number of stamps
         model.addConstr(gp.quicksum(x[i,t,m] for m in M)<=stamps[i])
 
-    
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 
 setup_time = [[1]*len(orders) for _ in orders]
 
 
+# +
 # --- CHANGING TIME-----------------------------------------------------------
 for m in M:
     for i in I:
+        if list(machines[m])[0][:3]=='MIX' and orders[i]['double']:
+            t_sup=1
+        else:
+            t_sup=0
         for j in I:
             if i == j: 
                 continue
@@ -122,51 +150,113 @@ for m in M:
             # si setup_time=0, pas besoin de contraindre
             if s_ij > 0:
                 # pour tout t où t + s_ij reste dans l'horizon
-                for t in range(timeline - s_ij):
-                    for tau in range(1, s_ij+1):
+                for t in range(timeline - s_ij-1-t_sup):
+                    for tau in range(1, s_ij+1+t_sup):
                         model.addConstr(
                             x[i, t, m] + x[j, t + tau, m] <= 1,
                             name=f"setup_m{m}_i{i}_j{j}_t{t}_tau{tau}"
                         )
 
 
-echelle_temporelle=0.5
 
-timeline=40
+Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750, 'VE':0}}
 
-Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750}}
+# # +
 
 N = len(orders)
 for i in range(N):
     cork_type=orders[i]['cork type']
     double = "double" if orders[i]['double'] else "simple"
-    quantite_restante=orders[i]["quantité restante"]
+    quantite_restante=float(orders[i]["quantité restante"].replace(',', '.'))*1000
     if double=="simple":
-        model.addConstrs(gp.quicksum(x[i,m,t]*Cadences[double][cork_type]*echelle_temporelle for t in range(timeline) for m in M)==(quantite_restante//Cadences[double][cork_type]+1)*Cadences[double][cork_type])
-    if double=='double':
-        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][cork_type]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][cork_type]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>=0)
-        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][cork_type]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][cork_type]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['simple'][cork_type]*echelle_temporelle)
-        model.addConstrs(gp.quicksum(0.5*x[i,m,t]*Cadences['simple'][cork_type]*echelle_temporelle for t in range(timeline) for m in M if machines[i][:3]=='MIX')+gp.quicksum(0.5*x[i,m,t]*Cadences['double'][cork_type]*echelle_temporelle for t in range(timeline) for m in range(M) if machines[i][:3]=='VTF')-quantite_restante>Cadences['double'][cork_type]*echelle_temporelle)
+        model.addConstr(gp.quicksum(x[i,t,m]*
+                                     Cadences['simple'][cork_type]*echelle_temporelle
+                                     for t in range(timeline)
+                                     for m in M
+                                     if list(machines[m])[0][:3]=='MIX')+
+                                     gp.quicksum(x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle
+                                                 for t in range(timeline)
+                                                 for m in M
+                                                 if list(machines[m])[0][:3]=='VTF')-quantite_restante>=0)
+    else:
+        model.addConstr(gp.quicksum(0.5*x[i,t,m]*
+                                     Cadences['simple'][cork_type]*echelle_temporelle 
+                                     for t in range(timeline) 
+                                     for m in M 
+                                     if list(machines[m])[0][:3]=='MIX')+
+                                     gp.quicksum(x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle
+                                                 for t in range(timeline) 
+                                                 for m in M 
+                                                 if list(machines[m])[0][:3]=='VTF')-quantite_restante>=0)
+        """model.addConstr(gp.quicksum(0.5*x[i,t,m]*
+                                    Cadences['simple'][cork_type]*echelle_temporelle 
+                                    for t in range(timeline) 
+                                    for m in M if list(machines[m])[0][:3]=='MIX')+
+                                    gp.quicksum(0.5*x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle 
+                                                for t in range(timeline) 
+                                                for m in M if list(machines[m])[0][:3]=='VTF')-quantite_restante<=
+                                                    (C.  adences['simple'][cork_type]*echelle_temporelle)*0.5+Cadences['double'][cork_type]*echelle_temporelle+1)"""
 
-# ---- OBJECTIVE ------------------------------------------------------------
-model.setObjective(
-    K * gp.quicksum(Tvar[i] for i in I) + gp.quicksum(Evar[i] for i in I)+gp.quicksum((x[i,t,m]-x[i,t+1,m])*(x[i,t,m]-x[i,t+1,m]) for t in range(timeline-1) for m in M for i in I),
-    GRB.MINIMIZE
-)
+# for i, ordre in enumerate(orders):
+#     model.addConstr(
+#         gp.quicksum(x[i, t, m] for m in range(n_machines)
+#                     for t in range(ordre['due date'])) == ordre['duration'],name=f"assign_{i}")
 
-for i, ordre in enumerate(orders):
-    model.addConstr(
-        gp.quicksum(x[i, t, m] for m in range(machines)
-                    for t in range(ordre['due date'])) == ordre['duration'],name=f"assign_{i}")
-
-for m in range(machines):
+for m in range(n_machines):
     for t in range(timeline):
         model.addConstr(
             gp.quicksum(
                 x[i, t, m]
                 for i, ordre in enumerate(orders) )<= 1,
             name=f"machine_{m}time{t}")
+        
+# ---- OBJECTIVE ------------------------------------------------------------
+model.setObjective(
+    Kret * gp.quicksum(Tvar[i]**2 for i in I) + Kav*gp.quicksum(Evar[i]**2 for i in I)+ 
+    Kchange*gp.quicksum((x[i,t,m]-x[i,t+1,m])*(x[i,t,m]-x[i,t+1,m]) for t in range(timeline-1) for m in M for i in I)+K_surplus* (gp.quicksum(
+    gp.quicksum(
+        0.5 * x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'MIX'
+    )
+    +
+    gp.quicksum(
+        0.5 * x[i, t, m] * Cadences['double'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'VTF'
+    )
+    -
+    float(orders[i]["quantité restante"].replace(',', '.')) * 1000
+    for i in range(N) if orders[i]['double']==1
+)
+ 
++
+ 
+gp.quicksum(
+    gp.quicksum(
+x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'MIX'
+    )
+    +
+    gp.quicksum(
+     x[i, t, m] * Cadences['double'][cork_type] * echelle_temporelle
+        for t in range(timeline)
+        for m in M
+        if list(machines[m])[0][:3] == 'VTF'
+    )
+    -
+    float(orders[i]["quantité restante"].replace(',', '.')) * 1000
+    for i in range(N) if orders[i]['double']==0
+)),
+    GRB.MINIMIZE
+)
 
+# --- OPTIMIZATION ----------------------------------------------------------
+model.Params.MIPGap = 0.05
 model.optimize()
 
 
@@ -179,87 +269,78 @@ if model.status == GRB.OPTIMAL:
     for (i, t, m), var in x.items():
         if var.X > 0.5:
             duration = 1  # chaque x[i, t, m] = 1 correspond à une unité de temps
-            order_id = orders[i]['numéro']
+            order_id = orders[i]['référence commande']
             schedule.append({
-                'Machine': m,
-                'Start': t,
-                'Duration': duration,
+                'Machine': list(machines[m])[0],
+                'Start': origin + t * slot_duration,
+                'Duration': slot_duration,
                 'Order': f"Ordre {order_id}",
                 'Index': i
             })
 else:
     print("Pas de solution optimale trouvée.")
 
-# Regrouper par machine
-machines_used = sorted(set(task['Machine'] for task in schedule))
-machine_to_y = {m: idx for idx, m in enumerate(machines_used)}
 
-# Palette de couleurs unique par ordre
-unique_orders = sorted(set(task['Index'] for task in schedule))
+# --- 1) Définition des bornes journalières ---
+days = []
+# lundi 7 juillet 2025 à 8h
+current = origin
+# jusqu'au samedi 12 juillet 2025 à 11h
+end_day = end
+
+# on crée une liste de tuples (day_name, day_start, day_end)
+while current < end_day:
+    day_start = current
+    # le prochain pas de 24h
+    next_day = day_start + timedelta(days=1)
+    # si on dépasse le samedi 11h, on fixe à end_day
+    day_end = min(next_day, end_day)
+    days.append((day_start.strftime('%a %d/%m'),
+                 day_start, day_end))
+    current = next_day
+
+# --- 2) Préparation du mapping machine → y et couleurs des ordres (comme avant) ---
+machines_used = sorted(set(task['Machine'] for task in schedule))
+machine_to_y  = {m: idx for idx, m in enumerate(machines_used)}
+unique_orders  = sorted(set(task['Index'] for task in schedule))
 order_to_color = {i: plt.cm.tab20(i % 20) for i in unique_orders}
 
-# Tracer
-fig, ax = plt.subplots(figsize=(12, 6))
+# --- 3) Tracé multi‐subplots, un par jour ---
+n_days = len(days)
+fig, axes = plt.subplots(n_days, 1, figsize=(12, 2*n_days), sharex=False)
 
-for task in schedule:
-    y = machine_to_y[task['Machine']]
-    color = order_to_color[task['Index']]
-    ax.barh(y, task['Duration'], left=task['Start'], height=0.4,
-            color=color, edgecolor='black')
-    
-# Affichage facultatif de l'étiquette sur chaque bloc :
-# ax.text(task['Start'] + task['Duration'] / 2, y, task['Order'],
-#         va='center', ha='center', fontsize=8, color='white')
+for ax, (day_label, day_start, day_end) in zip(axes, days):
+    for task in schedule:
+        # horaire absolu de début et fin
+        t0 = task['Start']
+        t1 = t0 + task['Duration']
+        # on ne trace que si intersection avec la journée
+        if t1 > day_start and t0 < day_end:
+            # on borne à l'intérieur de la journée
+            left  = max(t0, day_start)
+            right = min(t1, day_end)
+            width = right - left
+            y     = machine_to_y[task['Machine']]
+            color = order_to_color[task['Index']]
+            ax.barh(y, width=width, left=left, height=0.4,
+                    color=color, edgecolor='black')
+    # réglages de l'axe Y
+    ax.set_yticks(range(len(machines_used)))
+    ax.set_yticklabels([f"Machine {m}" for m in machines_used])
+    # réglages de l'axe X entre day_start et day_end
+    ax.set_xlim(day_start, day_end)
+    ax.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0,24,4)))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    ax.set_title(f"{day_label} ({day_start.strftime('%d/%m %H:%M')} → {day_end.strftime('%H:%M')})")
+    ax.grid(True, axis='x', linestyle=':', alpha=0.5)
 
-# Axe y avec noms de machines
-ax.set_yticks(range(len(machines_used)))
-ax.set_yticklabels([f"Machine {m}" for m in machines_used])
-ax.set_xlabel("Temps")
-ax.set_title("Emploi du temps des ordres par machine")
-ax.grid(True)
-
-# Légende avec une seule entrée par ordre
-legend_patches = []
-already_seen = set()
-for task in schedule:
-    idx = task['Index']
-    label = task['Order']
-    if label not in already_seen:
-        legend_patches.append(mpatches.Patch(color=order_to_color[idx], label=label))
-        already_seen.add(label)
-
-ax.legend(handles=legend_patches, title="Ordres", bbox_to_anchor=(1.05, 1), loc='upper left')
-
-plt.tight_layout()
+# Légende commune
+legend_patches = [mpatches.Patch(color=order_to_color[i], label=f"Ordre {orders[i]['référence commande']}")
+                  for i in unique_orders]
+fig.legend(handles=legend_patches, title="Ordres", 
+           bbox_to_anchor=(1.02, 0.5), loc='center left')
+plt.tight_layout(rect=[0,0,0.85,1])
 plt.show()
-
-
-# +
-finishing_times={}
-for task in schedule:
-    if task['Index'] in finishing_times.keys():
-        if finishing_times[task['Index']]<task['Index']+task['Duration']:
-            finishing_times[task['Index']]=task['Index']+task['Duration']
-    else:
-        finishing_times[task['Index']]=task['Index']+task['Duration']
-        
-avance=[0 for _ in range(len(finishing_times))]
-for ordre in orders:
-    avance[ordre['numéro']-1]=ordre['due date']-finishing_times[ordre['numéro']-1]
-    
-indices = [i+1 for i in range(len(finishing_times))]
-legendes = [f'Ordre{i+1}' for i in range(len(finishing_times))]
-plt.bar(indices, avance, color='blue', edgecolor='black')
-
-# Remplacer les valeurs de l'axe x par des labels
-plt.xticks(indices, legendes, rotation=45)
-
-plt.xlabel("Ordres")
-plt.ylabel("Durée totale")
-plt.title("Durée par ordre")
-plt.tight_layout()
-plt.show()
-    
 # -
 
 
