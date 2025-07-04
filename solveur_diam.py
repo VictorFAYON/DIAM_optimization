@@ -237,8 +237,8 @@ if model.status == GRB.OPTIMAL:
             order_id = orders[i]['référence commande']
             schedule.append({
                 'Machine': list(machines[m])[0],
-                'Start': t,
-                'Duration': duration,
+                'Start': origin + t * slot_duration,
+                'Duration': slot_duration,
                 'Order': f"Ordre {order_id}",
                 'Index': i
             })
@@ -246,80 +246,63 @@ else:
     print("Pas de solution optimale trouvée.")
 
 
-# Regrouper par machine
-machines_used = sorted(set(task['Machine'] for task in schedule))
-machine_to_y = {m: idx for idx, m in enumerate(machines_used)}
+# --- 1) Définition des bornes journalières ---
+days = []
+# lundi 7 juillet 2025 à 8h
+current = origin
+# jusqu'au samedi 12 juillet 2025 à 11h
+end_day = datetime(2025,8,12,11,0)
 
-# Palette de couleurs unique par ordre
-unique_orders = sorted(set(task['Index'] for task in schedule))
+# on crée une liste de tuples (day_name, day_start, day_end)
+while current < end_day:
+    day_start = current
+    # le prochain pas de 24h
+    next_day = day_start + timedelta(days=1)
+    # si on dépasse le samedi 11h, on fixe à end_day
+    day_end = min(next_day, end_day)
+    days.append((day_start.strftime('%a %d/%m'),
+                 day_start, day_end))
+    current = next_day
+
+# --- 2) Préparation du mapping machine → y et couleurs des ordres (comme avant) ---
+machines_used = sorted(set(task['Machine'] for task in schedule))
+machine_to_y  = {m: idx for idx, m in enumerate(machines_used)}
+unique_orders  = sorted(set(task['Index'] for task in schedule))
 order_to_color = {i: plt.cm.tab20(i % 20) for i in unique_orders}
 
-# Tracer
-fig, ax = plt.subplots(figsize=(12, 6))
+# --- 3) Tracé multi‐subplots, un par jour ---
+n_days = len(days)
+fig, axes = plt.subplots(n_days, 1, figsize=(12, 2*n_days), sharex=False)
 
-for task in schedule:
-    y = machine_to_y[task['Machine']]
-    color = order_to_color[task['Index']]
-    ax.barh(y, task['Duration'], left=task['Start'], height=0.4,
-            color=color, edgecolor='black')
+for ax, (day_label, day_start, day_end) in zip(axes, days):
+    for task in schedule:
+        # horaire absolu de début et fin
+        t0 = task['Start']
+        t1 = t0 + task['Duration']
+        # on ne trace que si intersection avec la journée
+        if t1 > day_start and t0 < day_end:
+            # on borne à l'intérieur de la journée
+            left  = max(t0, day_start)
+            right = min(t1, day_end)
+            width = right - left
+            y     = machine_to_y[task['Machine']]
+            color = order_to_color[task['Index']]
+            ax.barh(y, width=width, left=left, height=0.4,
+                    color=color, edgecolor='black')
+    # réglages de l'axe Y
+    ax.set_yticks(range(len(machines_used)))
+    ax.set_yticklabels([f"Machine {m}" for m in machines_used])
+    # réglages de l'axe X entre day_start et day_end
+    ax.set_xlim(day_start, day_end)
+    ax.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0,24,4)))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    ax.set_title(f"{day_label} ({day_start.strftime('%d/%m %H:%M')} → {day_end.strftime('%H:%M')})")
+    ax.grid(True, axis='x', linestyle=':', alpha=0.5)
 
-# Affichage facultatif de l'étiquette sur chaque bloc :
-# ax.text(task['Start'] + task['Duration'] / 2, y, task['Order'],
-#         va='center', ha='center', fontsize=8, color='white')
-
-# Axe y avec noms de machines
-ax.set_yticks(range(len(machines_used)))
-ax.set_yticklabels(machines_used)
-ax.set_xlabel("Temps")
-ax.set_title("Emploi du temps des ordres par machine")
-ax.grid(True)
-
-# Légende avec une seule entrée par ordre
-legend_patches = []
-already_seen = set()
-for task in schedule:
-    idx = task['Index']
-    label = task['Order']
-    if label not in already_seen:
-        legend_patches.append(mpatches.Patch(color=order_to_color[idx], label=label))
-        already_seen.add(label)
-
-ax.legend(handles=legend_patches, title="Ordres", bbox_to_anchor=(1.05, 1), loc='upper left')
-
-plt.tight_layout()
+# Légende commune
+legend_patches = [mpatches.Patch(color=order_to_color[i], label=f"Ordre {orders[i]['référence commande']}")
+                  for i in unique_orders]
+fig.legend(handles=legend_patches, title="Ordres", 
+           bbox_to_anchor=(1.02, 0.5), loc='center left')
+plt.tight_layout(rect=[0,0,0.85,1])
 plt.show()
-
-finishing_times={}
-for task in schedule:
-    if task['Index'] in finishing_times.keys():
-        if finishing_times[task['Index']]<task['Index']+task['Duration']:
-            finishing_times[task['Index']]=task['Index']+task['Duration']
-    else:
-        finishing_times[task['Index']]=task['Index']+task['Duration']
-
-avance=[]
-for ordre in orders:
-    print(ordre['référence commande'])
-    avance.append(ordre['due date']-finishing_times[ordre['référence commande']-1])
-
-indices = [i+1 for i in range(len(finishing_times))]
-legendes = [f'Ordre{i+1}' for i in range(len(finishing_times))]
-plt.bar(indices, avance, color='blue', edgecolor='black')
-
-# Remplacer les valeurs de l'axe x par des labels
-plt.xticks(indices, legendes, rotation=45)
-
-plt.xlabel("Ordres")
-plt.ylabel("Durée totale")
-plt.title("Durée par ordre")
-plt.tight_layout()
-plt.show()
-
-
-# -
-
-
-
-
-
-
