@@ -1,10 +1,17 @@
+# +
 import gurobipy as gp
 from gurobipy import GRB
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.dates as mdates
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta , time
 import pandas as pd
+
+
+
+# -
+
+
 
 # 1) Définir automatiquement origin = maintenant
 
@@ -15,10 +22,41 @@ origin = datetime(start[0],start[1],start[2],start[3],start[4])
 finish=(2025, 7, 14, 11, 0)
 end    = datetime(finish[0],finish[1],finish[2],finish[3],finish[4])
 
+# +
 # 2) Créneaux de 30 min
 echelle_temporelle=0.5
 slot_duration = timedelta(minutes=60*echelle_temporelle)
 timeline = int((end - origin) / slot_duration)
+T = range(timeline)
+# --- 1) Disponibilités machines : on part toujours de minuit chaque jour ---
+avail_df = pd.read_csv(
+    'Machine_Availability.csv',
+    sep=';',
+    encoding='cp1252',
+    parse_dates=['Date'],
+    dayfirst=True
+)
+avail_df = avail_df.drop(columns=["LASTR13", "LASTR14","MIXFOG13",])
+
+avail_df.columns = avail_df.columns.str.strip()
+machines = [c for c in avail_df.columns if c != 'Date']
+
+
+available_slots = {m: set() for m in machines}
+for _, row in avail_df.iterrows():
+    day = row['Date'].date()
+    day_midnight = datetime.combine(day, time(0,0))
+    slots_per_day = int(timedelta(days=1)/slot_duration)
+    for h in range(slots_per_day):
+        slot_dt = day_midnight + h*slot_duration
+        if origin <= slot_dt < end:
+            for m in machines:
+                t = int((slot_dt - origin)/slot_duration)
+                hours = float(row[m])
+                if h*slot_duration < timedelta(hours=hours):
+                    available_slots[m].add(t)
+
+# -
 
 
 model = gp.Model("timetable_discrete")
@@ -60,6 +98,7 @@ data = data.sort_values(by="Date")
 data = data.head(20)
 # print(data.head())
 
+# +
 commandes=data['OF'].unique()
 orders=[]
 for commande in commandes:
@@ -71,7 +110,10 @@ for commande in commandes:
     dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
+
+orders = orders[:7]
 # print(orders)
+# -
 
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
@@ -99,6 +141,15 @@ C = model.addVars(I, vtype=GRB.INTEGER, name="C")
 # tardiness ≥ max{0, C_i − d_i}, earliness ≥ max{0, d_i − C_i}
 Tvar = model.addVars(I, vtype=GRB.CONTINUOUS, name="T")   # tardiness
 Evar = model.addVars(I, vtype=GRB.CONTINUOUS, name="E")   # earliness
+
+
+# Interdire les (t,m) hors service  -------------------------
+for m in M:
+    forbidden = set(T) - available_slots.get(fire_machines[m], set())
+    for t in forbidden:
+        for i in I:
+            model.addConstr(x[i, t, m] == 0,
+                            name=f"avail_m{m}_t{t}")
 
 
 # +
@@ -256,7 +307,7 @@ x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
 )
 
 # --- OPTIMIZATION ----------------------------------------------------------
-model.Params.MIPGap = 0.05
+#model.Params.MIPGap = 0.01
 model.optimize()
 
 
