@@ -10,11 +10,6 @@ import pandas as pd
 
 
 # -
-
-
-
-# 1) Définir automatiquement origin = maintenant
-
 # Début : au format(year,month,day,hour,minute)
 start=(2025, 7, 7, 8, 0)
 origin = datetime(start[0],start[1],start[2],start[3],start[4])
@@ -30,13 +25,12 @@ timeline = int((end - origin) / slot_duration)
 T = range(timeline)
 # --- 1) Disponibilités machines : on part toujours de minuit chaque jour ---
 avail_df = pd.read_csv(
-    'Machine_Availability.csv',
-    sep=';',
+    'Machine_Availability_fictif.csv',
+    sep=',',
     encoding='cp1252',
     parse_dates=['Date'],
     dayfirst=True
 )
-avail_df = avail_df.drop(columns=["LASTR13", "LASTR14","MIXFOG13",])
 
 avail_df.columns = avail_df.columns.str.strip()
 machines = [c for c in avail_df.columns if c != 'Date']
@@ -61,14 +55,14 @@ for _, row in avail_df.iterrows():
 
 model = gp.Model("timetable_discrete")
 
-data = pd.read_csv('Machine_Cadence.csv', sep=';', encoding='cp1252')
+machine_cadence = pd.read_csv('Machine_Cadence_fictif.csv', sep=',', encoding='cp1252')
 
-data.drop( data [data['Cork Type']=='MGF'].index, inplace=True)
+machine_cadence.drop( machine_cadence [machine_cadence['Cork Type']=='MGF'].index, inplace=True)
 
 
 #Liste des machines fonctionelles 
 fire_machines=[]
-all_machines=list(data['Machine'].unique())
+all_machines=list(machine_cadence['Machine'].unique())
 for m in all_machines:
     if m[:3]!='LAS':#Non-laser Machine
         fire_machines.append(m)
@@ -77,47 +71,36 @@ machines=[]
 
 for machine in fire_machines:
     dico={}
-    a=data[data['Machine']==fire_machines[0]]['Cork Type']
+    a=machine_cadence[machine_cadence['Machine']==fire_machines[0]]['Cork Type']
     n=len(a)
     L=[]
     for i in range(n):
-        L.append({a.iloc[i]:data[data['Machine']==fire_machines[0]]['Cadence'].iloc[i]})
+        L.append({a.iloc[i]:machine_cadence[machine_cadence['Machine']==fire_machines[0]]['Cadence'].iloc[i]})
     dico[f'{machine}']=L
     machines.append(dico)
 
-# print(machines)
 
 
-# supprimer une des machines
+DB_OF = pd.read_csv('DB_OF_fictif.csv', sep=',', encoding='cp1252')
+DB_OF["Date"] = pd.to_datetime(DB_OF["Date"], dayfirst=True)
+DB_OF = DB_OF.sort_values(by="Date")
 
-n_machines = 13
 
-data = pd.read_csv('DB_OF.csv', sep=';', encoding='cp1252')
-data["Date"] = pd.to_datetime(data["Date"], dayfirst=True)
-data = data.sort_values(by="Date")
-data = data.head(20)
-# print(data.head())
-
-# +
-commandes=data['OF'].unique()
+commandes=DB_OF['OF'].unique()
 orders=[]
 for commande in commandes:
     dico={}
     dico["référence commande"]=commande
-    dico["due date"]=data[data['OF']==commande]['Date'].iloc[0]
-    dico["quantité restante"]=data[data['OF']==commande]['Remaining_Qty'].iloc[0]
-    dico["cork type"]=data[data['OF']==commande]['Family'].iloc[0]
-    dico["double"]=1 if data[data['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
+    dico["due date"]=DB_OF[DB_OF['OF']==commande]['Date'].iloc[0]
+    dico["quantité restante"]=DB_OF[DB_OF['OF']==commande]['Remaining_Qty'].iloc[0]
+    dico["cork type"]=DB_OF[DB_OF['OF']==commande]['Family'].iloc[0]
+    dico["double"]=1 if DB_OF[DB_OF['OF']==commande]['Type'].iloc[0][-5:] == "DOBLE" else 0
     dico["stamp"] = 1
     orders.append(dico)
 
-orders = orders[:7]
-# print(orders)
-# -
-
 # ---- PARAMETERS -----------------------------------------------------------
 I        = range(len(orders))          # order indices
-M        = range(n_machines)             # machine indices
+M        = range(len(machines))             # machine indices
 T        = range(timeline)             # time indices
 Kret        = 0.1
 Kav = 0.01
@@ -185,8 +168,7 @@ for i in I:
 
 setup_time = [[1]*len(orders) for _ in orders]
 
-
-# +
+# + endofcell="--"
 # --- CHANGING TIME-----------------------------------------------------------
 for m in M:
     for i in I:
@@ -212,13 +194,13 @@ for m in M:
 
 Cadences = {'simple':{'VT':8000, 'VE':6400},'double':{'VT':6750, 'VE':0}}
 
-# # +
+# # # +
 
 N = len(orders)
 for i in range(N):
     cork_type=orders[i]['cork type']
     double = "double" if orders[i]['double'] else "simple"
-    quantite_restante=float(orders[i]["quantité restante"].replace(',', '.'))*1000
+    quantite_restante=float(orders[i]["quantité restante"])*1000
     if double=="simple":
         model.addConstr(gp.quicksum(x[i,t,m]*
                                      Cadences['simple'][cork_type]*echelle_temporelle
@@ -239,21 +221,8 @@ for i in range(N):
                                                  for t in range(timeline) 
                                                  for m in M 
                                                  if list(machines[m])[0][:3]=='VTF')-quantite_restante>=0)
-        """model.addConstr(gp.quicksum(0.5*x[i,t,m]*
-                                    Cadences['simple'][cork_type]*echelle_temporelle 
-                                    for t in range(timeline) 
-                                    for m in M if list(machines[m])[0][:3]=='MIX')+
-                                    gp.quicksum(0.5*x[i,t,m]*Cadences['double'][cork_type]*echelle_temporelle 
-                                                for t in range(timeline) 
-                                                for m in M if list(machines[m])[0][:3]=='VTF')-quantite_restante<=
-                                                    (C.  adences['simple'][cork_type]*echelle_temporelle)*0.5+Cadences['double'][cork_type]*echelle_temporelle+1)"""
 
-# for i, ordre in enumerate(orders):
-#     model.addConstr(
-#         gp.quicksum(x[i, t, m] for m in range(n_machines)
-#                     for t in range(ordre['due date'])) == ordre['duration'],name=f"assign_{i}")
-
-for m in range(n_machines):
+for m in M:
     for t in range(timeline):
         model.addConstr(
             gp.quicksum(
@@ -279,7 +248,7 @@ model.setObjective(
         if list(machines[m])[0][:3] == 'VTF'
     )
     -
-    float(orders[i]["quantité restante"].replace(',', '.')) * 1000
+    float(orders[i]["quantité restante"]) * 1000
     for i in range(N) if orders[i]['double']==1
 )
  
@@ -300,7 +269,7 @@ x[i, t, m] * Cadences['simple'][cork_type] * echelle_temporelle
         if list(machines[m])[0][:3] == 'VTF'
     )
     -
-    float(orders[i]["quantité restante"].replace(',', '.')) * 1000
+    float(orders[i]["quantité restante"]) * 1000
     for i in range(N) if orders[i]['double']==0
 )),
     GRB.MINIMIZE
@@ -393,5 +362,6 @@ fig.legend(handles=legend_patches, title="Ordres",
 plt.tight_layout(rect=[0,0,0.85,1])
 plt.show()
 # -
+# --
 
 
