@@ -66,5 +66,5 @@ The following Python libraries are also required:
 
 The stable and validated version of this project corresponds to the following commit hash:
 
-{insert hash}
+94f451bef52bcb6a7b1035564b71e282f056fd34
 
